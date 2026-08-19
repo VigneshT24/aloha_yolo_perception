@@ -20,3 +20,8 @@ ROS 2 perception package for Mobile ALOHA that runs YOLOv8 object detection, com
    ```bash
    ros2 run rqt_image_view rqt_image_view
    ```
+
+## Credits
+Akhil Joshi's Repo: https://github.com/Robotics-and-Explanable-AI-Lab/Kinova-Perception-and-Motion-Planning
+
+Professor Mingyu Cai
