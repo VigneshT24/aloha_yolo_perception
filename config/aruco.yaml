@@ -1,0 +1,25 @@
+aruco:
+  dictionary: DICT_4X4_50
+  marker_size: 0.50
+  marker_ids:
+    tl: 3
+    tr: 2
+    br: 1
+    bl: 0
+  measurement_timeout: 1.0
+  reference_frame: world
+  target_frame_id: marker_square_center
+  container_z_offset: 0.0
+  cameras:
+    realsense:
+      enabled: true
+      image_topic: /global_camera/color/image_raw
+      info_topic: /global_camera/color/camera_info
+    oakd:
+      enabled: true
+      image_topic: /oak_d/color/image_raw
+      info_topic: /oak_d/color/camera_info
+    kinova:
+      enabled: true
+      image_topic: /camera/color/image_raw
+      info_topic: /camera/color/camera_info

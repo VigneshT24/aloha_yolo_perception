@@ -1,0 +1,141 @@
+# # All camera parameters for Kinova Gen3 pick and place system
+# oak_d:
+#   topics:
+#     rgb: /oak_d/color/image_raw
+#     depth: /oak_d/depth/image_raw
+#     camera_info: /oak_d/color/camera_info
+#     pointcloud: /oak_d/stereo/points
+#   tf_frame: oak_d_camera_link
+#   intrinsics:
+#     fx: 426.1166343
+#     fy: 425.9295924
+#     cx: 315.2250461
+#     cy: 205.3090416
+#     width: 640
+#     height: 400
+#   calibration:
+#     x: 0.362562
+#     y: 0.719192
+#     z: 1.279846
+#     qx: -0.341494
+#     qy: -0.888985
+#     qz: 0.299234
+#     qw: 0.059552
+#   depth_clip_min: 0.15
+#   depth_clip_max: 3.0
+#   qos: reliable
+
+# realsense_global:
+#   topics:
+#     rgb: /global_camera/color/image_raw
+#     pointcloud: /global_camera/depth/color/points
+#     camera_info: /global_camera/color/camera_info
+#   tf_frame: global_camera_color_optical_frame
+#   depth_tf_frame: global_camera_depth_optical_frame
+#   calibration:
+#     x: 0.99
+#     y: -0.13
+#     z: 0.77
+#     qx: 0.6220
+#     qy: 0.6099
+#     qz: -0.3475
+#     qw: -0.3469
+#   depth_clip_min: 0.20
+#   depth_clip_max: 3.5
+#   qos: reliable
+#   realsense_params:
+#     camera_name: global_camera
+#     align_depth: true
+#     pointcloud_enable: true
+#     stream_filter: 2
+#     stream_index_filter: 0
+#     depth_profile: 640x480x15
+#     rgb_profile: 640x480x15
+#     publish_tf: false
+
+# wrist:
+#   topics:
+#     rgb: /camera/color/image_raw
+#     depth: /camera/depth/image_raw
+#     pointcloud: /camera/depth/color/points
+#     camera_info: /camera/color/camera_info
+#   tf_frame: camera_color_frame
+#   calibration: NOT_CALIBRATED
+#   depth_clip_min: 0.0
+#   depth_clip_max: 3.0
+#   qos: best_effort
+#   note: Hand-eye calibration pending. Use easy_handeye2 eye_on_hand:=true
+
+# fusion:
+#   output_topic: /fused/points
+#   status_topic: /fused/status
+#   output_frame: base_link
+#   publish_rate_hz: 10.0
+#   voxel_leaf_size: 0.01
+#   stale_timeout: 8.0
+#   workspace:
+#     x_min: -1.5
+#     x_max: 1.5
+#     y_min: -1.5
+#     y_max: 1.5
+#     z_min: 0.0
+#     z_max: 2.0
+
+cam_top:
+  topics:
+    rgb: /cam_top/color/image_raw
+    pointcloud: /cam_top/depth/color/points
+    camera_info: /cam_top/color/camera_info
+  tf_frame: cam_top_color_optical_frame
+  depth_tf_frame: cam_top_depth_optical_frame
+  depth_clip_min: 0.20
+  depth_clip_max: 3.5
+  qos: reliable
+
+cam_bottom:
+  topics:
+    rgb: /cam_bottom/color/image_raw
+    pointcloud: /cam_bottom/depth/color/points
+    camera_info: /cam_bottom/color/camera_info
+  tf_frame: cam_bottom_color_optical_frame
+  depth_tf_frame: cam_bottom_depth_optical_frame
+  depth_clip_min: 0.20
+  depth_clip_max: 3.5
+  qos: reliable
+
+wrist_left:
+  topics:
+    rgb: /wrist_left/color/image_raw
+    pointcloud: /wrist_left/depth/color/points
+    camera_info: /wrist_left/color/camera_info
+  tf_frame: wrist_left_color_optical_frame
+  depth_tf_frame: wrist_left_depth_optical_frame
+  depth_clip_min: 0.05
+  depth_clip_max: 1.5
+  qos: best_effort
+
+wrist_right:
+  topics:
+    rgb: /wrist_right/color/image_raw
+    pointcloud: /wrist_right/depth/color/points
+    camera_info: /wrist_right/color/camera_info
+  tf_frame: wrist_right_color_optical_frame
+  depth_tf_frame: wrist_right_depth_optical_frame
+  depth_clip_min: 0.05
+  depth_clip_max: 1.5
+  qos: best_effort
+
+fusion:
+  output_topic: /fused/points
+  status_topic: /fused/status
+  output_frame: base_link
+  publish_rate_hz: 10.0
+  voxel_leaf_size: 0.01
+  stale_timeout: 8.0
+  workspace:
+    x_min: -1.5
+    x_max: 1.5
+    y_min: -1.5
+    y_max: 1.5
+    z_min: 0.0
+    z_max: 2.0
