@@ -1,6 +1,7 @@
 """YOLO object detection node for Mobile ALOHA"""
 
 import threading
+import time
 
 import cv2
 import numpy as np
@@ -82,15 +83,41 @@ class YoloDetectionNode(Node):
     def __init__(self):
         super().__init__('yolo_detection_node')
 
-        self.declare_parameter('model', 'yolov8n.pt')
-        self.declare_parameter('confidence', 0.5)
+        # === OLD ===
+        # self.declare_parameter('model', 'yolov8m.pt')
+        # self.declare_parameter('confidence', 0.45)
+        # self.declare_parameter('target_classes', [])
+        # self.declare_parameter('use_best_camera', True)
+        # self.declare_parameter('imgsz', 640)
+
+        # model_path = self.get_parameter('model').value
+        # self._confidence = self.get_parameter('confidence').value
+        # self._target_classes = self.get_parameter('target_classes').value
+        # self._use_best_camera = self.get_parameter('use_best_camera').value
+        # self._imgsz = self.get_parameter('imgsz').value
+
+        # from ultralytics import YOLO
+        # self._model = YOLO(model_path)
+        # self._bridge = CvBridge()
+
+        # self._cbg = ReentrantCallbackGroup()
+        # self._lock = threading.Lock()
+        # self._pose_ema: dict[str, np.ndarray] = {}
+        # self._alpha = 0.4
+
+        self.declare_parameter('model', 'yolov8m.pt')
+        self.declare_parameter('confidence', 0.45)
         self.declare_parameter('target_classes', [])
-        self.declare_parameter('use_best_camera', True)
+        self.declare_parameter('imgsz', 640)
+        self.declare_parameter('match_dist', 0.15)  # 15 cm search radius
+        self.declare_parameter('alpha', 0.4)
 
         model_path = self.get_parameter('model').value
         self._confidence = self.get_parameter('confidence').value
         self._target_classes = self.get_parameter('target_classes').value
-        self._use_best_camera = self.get_parameter('use_best_camera').value
+        self._imgsz = self.get_parameter('imgsz').value
+        self._match_dist = self.get_parameter('match_dist').value
+        self._alpha = self.get_parameter('alpha').value
 
         from ultralytics import YOLO
         self._model = YOLO(model_path)
@@ -98,6 +125,10 @@ class YoloDetectionNode(Node):
 
         self._cbg = ReentrantCallbackGroup()
         self._lock = threading.Lock()
+        
+        # 3D tracking dictionary: {track_id: {'pos': [x,y,z], 'cls': name, 'last_seen': time}}
+        self._tracks: dict[int, dict] = {}
+        self._next_track_id = 1
 
         # Per-camera caches: {cam: latest_msg}
         self._rgb: dict[str, Image] = {}
@@ -115,12 +146,20 @@ class YoloDetectionNode(Node):
             PoseArray, '/detected_object_poses', qos)
         self._pub_grasp = self.create_publisher(
             PoseStamped, '/grasp_pose', qos)
-        self._pub_vis = self.create_publisher(
-            Image, '/yolo_visualization', qos)
+
+        # === OLD ===
+        # self._pub_vis = self.create_publisher(
+        #     Image, '/yolo_visualization', qos)
 
         # subscribe dynamically to all 4 RealSense camera streams
         # self._camera_names = ['cam_top', 'cam_bottom', 'wrist_left', 'wrist_right']
         self._camera_names = ['cam_high', 'cam_low', 'cam_left_wrist', 'cam_right_wrist']
+
+        # create a separate visualization topic for each camera
+        self._pub_vis = {}
+        for cam in self._camera_names:
+            self._pub_vis[cam] = self.create_publisher(Image, f'/yolo_visualization/{cam}', qos)
+
         rqos = _reliable_qos(10)
         beqos = _best_effort_qos(5)
 
@@ -154,6 +193,36 @@ class YoloDetectionNode(Node):
             if cam not in self._cam_info:
                 self._cam_info[cam] = msg
 
+    def _match_or_create_3d_track(self, raw_world_pos: np.ndarray, class_name: str) -> tuple[int, np.ndarray]:
+        now = time.time()
+        matched_id = None
+        min_dist = float('inf')
+
+        for tid, data in self._tracks.items():
+            if data['cls'] != class_name:
+                continue
+            dist = float(np.linalg.norm(raw_world_pos - data['pos']))
+            if dist < self._match_dist and dist < min_dist:
+                min_dist = dist
+                matched_id = tid
+
+        if matched_id is not None:
+            smoothed = self._alpha * raw_world_pos + (1.0 - self._alpha) * self._tracks[matched_id]['pos']
+            self._tracks[matched_id]['pos'] = smoothed
+            self._tracks[matched_id]['last_seen'] = now
+            return matched_id, smoothed
+        else:
+            new_id = self._next_track_id
+            self._next_track_id += 1
+            self._tracks[new_id] = {'pos': raw_world_pos, 'cls': class_name, 'last_seen': now}
+            return new_id, raw_world_pos
+
+    def _cleanup_old_tracks(self) -> None:
+        now = time.time()
+        stale_ids = [tid for tid, data in self._tracks.items() if now - data['last_seen'] > 2.0]
+        for tid in stale_ids:
+            del self._tracks[tid]
+
     def _run_inference(self, cam: str) -> None:
         """Run YOLOv8 on the latest RGB from `cam`, publish results."""
         with self._lock:
@@ -182,7 +251,19 @@ class YoloDetectionNode(Node):
                 self.get_logger().debug(f'[{cam}] cv_bridge depth error: {exc}')
 
         # Run YOLO
-        results = self._model(bgr, verbose=False)
+        # results = self._model(bgr, verbose=False)
+        # results = self._model(bgr, verbose=False, imgsz=self._imgsz)
+        # results = self._model.track(
+        #     bgr, 
+        #     persist=True, 
+        #     tracker="bytetrack.yaml", 
+        #     iou=0.45,       
+        #     # augment=True,   
+        #     verbose=False,
+        #     imgsz=self._imgsz
+        # )
+        with self._lock:
+            results = self._model(bgr, verbose=False, imgsz=self._imgsz)
         K = np.array(info_msg.k).reshape(3, 3)
         fx, fy = K[0, 0], K[1, 1]
         cx, cy = K[0, 2], K[1, 2]
@@ -196,22 +277,90 @@ class YoloDetectionNode(Node):
 
         vis_img = bgr.copy()
 
+        # === OLD ===
+        # for result in results:
+        #     for box in result.boxes:
+        #         conf = float(box.conf[0])
+        #         if conf < self._confidence:
+        #             continue
+        #         cls_id = int(box.cls[0])
+        #         class_name = self._model.names.get(cls_id, str(cls_id))
+        #         if (self._target_classes
+        #                 and class_name not in self._target_classes):
+        #             continue
+
+        #         x1, y1, x2, y2 = box.xyxy[0].tolist()
+        #         px = int((x1 + x2) / 2)
+        #         py = int((y1 + y2) / 2)
+
+        #         # Build Detection2D
+        #         det = Detection2D()
+        #         det.header = det_array.header
+        #         det.bbox.center.position.x = (x1 + x2) / 2
+        #         det.bbox.center.position.y = (y1 + y2) / 2
+        #         det.bbox.size_x = x2 - x1
+        #         det.bbox.size_y = y2 - y1
+        #         hyp = ObjectHypothesisWithPose()
+        #         hyp.hypothesis.class_id = class_name
+        #         hyp.hypothesis.score = conf
+        #         det.results.append(hyp)
+        #         det_array.detections.append(det)
+
+        #         # 3D back-projection
+        #         pose_cam = self._back_project(
+        #             px, py, x1, y1, x2, y2,
+        #             depth_img, fx, fy, cx, cy)
+        #         if pose_cam is None:
+        #             continue
+
+        #         # Transform to world
+        #         try:
+        #             tf = self._tf_buffer.lookup_transform(
+        #                 'world', optical_frame,
+        #                 rclpy.time.Time(),
+        #                 timeout=rclpy.duration.Duration(seconds=0.2))
+        #         except Exception as exc:
+        #             self.get_logger().warn(
+        #                 f'[{cam}] TF {optical_frame}→world: {exc}',
+        #                 throttle_duration_sec=5.0)
+        #             continue
+
+        #         pose_stamped = PoseStamped()
+        #         pose_stamped.header.frame_id = optical_frame
+        #         pose_stamped.header.stamp = rgb_msg.header.stamp
+        #         pose_stamped.pose = pose_cam
+        #         try:
+        #             pose_base = tf2_geometry_msgs.do_transform_pose(
+        #                 pose_cam, tf)
+        #         except Exception as exc:
+        #             self.get_logger().warn(f'[{cam}] Transform error: {exc}')
+        #             continue
+
+        #         poses_3d.append((pose_base, conf))
+
+        #         # Visualization
+        #         cv2.rectangle(vis_img, (int(x1), int(y1)),
+        #                       (int(x2), int(y2)), (0, 255, 0), 2)
+        #         label = f'{cam}:{class_name} {conf:.2f}'
+        #         cv2.putText(vis_img, label, (int(x1), int(y1) - 5),
+        #                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+
         for result in results:
+            if result.boxes is None or len(result.boxes) == 0:
+                continue
+
             for box in result.boxes:
                 conf = float(box.conf[0])
                 if conf < self._confidence:
                     continue
                 cls_id = int(box.cls[0])
                 class_name = self._model.names.get(cls_id, str(cls_id))
-                if (self._target_classes
-                        and class_name not in self._target_classes):
+                if self._target_classes and class_name not in self._target_classes:
                     continue
 
                 x1, y1, x2, y2 = box.xyxy[0].tolist()
-                px = int((x1 + x2) / 2)
-                py = int((y1 + y2) / 2)
+                px, py = int((x1 + x2) / 2), int((y1 + y2) / 2)
 
-                # Build Detection2D
                 det = Detection2D()
                 det.header = det_array.header
                 det.bbox.center.position.x = (x1 + x2) / 2
@@ -224,44 +373,41 @@ class YoloDetectionNode(Node):
                 det.results.append(hyp)
                 det_array.detections.append(det)
 
-                # 3D back-projection
-                pose_cam = self._back_project(
-                    px, py, x1, y1, x2, y2,
-                    depth_img, fx, fy, cx, cy)
+                pose_cam = self._back_project(px, py, x1, y1, x2, y2, depth_img, fx, fy, cx, cy)
                 if pose_cam is None:
                     continue
 
-                # Transform to world
                 try:
                     tf = self._tf_buffer.lookup_transform(
                         'world', optical_frame,
-                        rclpy.time.Time(),
-                        timeout=rclpy.duration.Duration(seconds=0.2))
+                        rclpy.time.Time(), timeout=rclpy.duration.Duration(seconds=0.2))
                 except Exception as exc:
-                    self.get_logger().warn(
-                        f'[{cam}] TF {optical_frame}→world: {exc}',
-                        throttle_duration_sec=5.0)
+                    self.get_logger().warn(f'[{cam}] TF {optical_frame}→world: {exc}', throttle_duration_sec=5.0)
                     continue
 
-                pose_stamped = PoseStamped()
-                pose_stamped.header.frame_id = optical_frame
-                pose_stamped.header.stamp = rgb_msg.header.stamp
-                pose_stamped.pose = pose_cam
                 try:
-                    pose_base = tf2_geometry_msgs.do_transform_pose(
-                        pose_cam, tf)
+                    pose_world = tf2_geometry_msgs.do_transform_pose(pose_cam, tf)
                 except Exception as exc:
                     self.get_logger().warn(f'[{cam}] Transform error: {exc}')
                     continue
 
-                poses_3d.append((pose_base, conf))
+                # --- NEW 3D TRACKING LOGIC ---
+                raw_xyz = np.array([pose_world.position.x, pose_world.position.y, pose_world.position.z])
+                
+                with self._lock:
+                    track_id, smoothed_xyz = self._match_or_create_3d_track(raw_xyz, class_name)
+                    self._cleanup_old_tracks()
 
-                # Visualization
-                cv2.rectangle(vis_img, (int(x1), int(y1)),
-                              (int(x2), int(y2)), (0, 255, 0), 2)
-                label = f'{cam}:{class_name} {conf:.2f}'
-                cv2.putText(vis_img, label, (int(x1), int(y1) - 5),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+                pose_world.position.x = float(smoothed_xyz[0])
+                pose_world.position.y = float(smoothed_xyz[1])
+                pose_world.position.z = float(smoothed_xyz[2])
+                # -----------------------------
+
+                poses_3d.append((pose_world, conf))
+
+                cv2.rectangle(vis_img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
+                label = f'{class_name}#{track_id} {conf:.2f}'
+                cv2.putText(vis_img, label, (int(x1), int(y1) - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
         # Publish detection array
         self._pub_det.publish(det_array)
@@ -282,11 +428,19 @@ class YoloDetectionNode(Node):
             gp.pose = best_pose
             self._pub_grasp.publish(gp)
 
-        # Publish visualization
+        # # Publish visualization
+        # try:
+        #     vis_msg = self._bridge.cv2_to_imgmsg(vis_img, 'bgr8')
+        #     vis_msg.header = rgb_msg.header
+        #     self._pub_vis.publish(vis_msg)
+        # except Exception as exc:
+        #     self.get_logger().debug(f'[{cam}] vis publish error: {exc}')
+
+        # publish 2D visualizer feed to the specific camera's topic
         try:
             vis_msg = self._bridge.cv2_to_imgmsg(vis_img, 'bgr8')
             vis_msg.header = rgb_msg.header
-            self._pub_vis.publish(vis_msg)
+            self._pub_vis[cam].publish(vis_msg)
         except Exception as exc:
             self.get_logger().debug(f'[{cam}] vis publish error: {exc}')
 
