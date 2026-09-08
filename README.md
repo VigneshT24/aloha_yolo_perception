@@ -19,6 +19,16 @@ ROS 2 perception package for Mobile ALOHA that runs YOLOv8 object detection, com
 
 ## Important Prerequisites (System Reset)
 
+Before running any of the following commands in any terminal, first open a single terminal and run the following:
+
+```bash
+echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
+echo "source ~/ros2_ws/install/setup.bash" >> ~/.bashrc
+source ~/.bashrc
+```
+
+This is make sure that for any subsequent terminals that are newly opened and used can run `ros2` commands without it throwing a `ros2 command not found` error.
+
 To ensure a clean environment and prevent "Device Busy" or shared memory errors, **always run this reset sequence before starting the pipeline** (especially if a previous node crashed).
 
 1. **Clear ROS 2 Shared Memory & Restart Daemon:**
