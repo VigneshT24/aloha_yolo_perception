@@ -72,7 +72,7 @@ To ensure a clean environment and prevent "Device Busy" or shared memory errors,
 2. Build the new package so ROS 2 can find it:
    ```bash
    cd ~/interbotix_ws
-   colcon build --packages-select aloha_yolo_perception --symlink-install
+   colcon build --packages-select aloha_yolo_pickup
    ```
 
 3. Launch hardware cameras:
@@ -91,7 +91,7 @@ To ensure a clean environment and prevent "Device Busy" or shared memory errors,
    ```bash
    source /opt/ros/humble/setup.bash
    source ~/interbotix_ws/install/setup.bash
-   ros2 run aloha_yolo_perception yolo_detection_node
+   ros2 run aloha_yolo_pickup yolo_detection_node
    ```
 6. View the 2D visualizer:
    ```bash
