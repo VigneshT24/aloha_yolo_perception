@@ -72,6 +72,7 @@ To ensure a clean environment and prevent "Device Busy" or shared memory errors,
 2. Build the new package so ROS 2 can find it:
    ```bash
    cd ~/interbotix_ws
+   rm -rf build/aloha_yolo_pickup install/aloha_yolo_pickup
    colcon build --packages-select aloha_yolo_pickup
    ```
 
@@ -110,7 +111,7 @@ To ensure a clean environment and prevent "Device Busy" or shared memory errors,
 ## After You Change The Code:
 
 ```bash
-cd ~/ros2_ws
+cd ~/interbotix_ws
 rm -rf build/aloha_yolo_pickup install/aloha_yolo_pickup
 colcon build --packages-select aloha_yolo_pickup
 source install/setup.bash
