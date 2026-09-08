@@ -29,6 +29,12 @@ echo "source ~/ros2_ws/install/setup.bash" >> ~/.bashrc
 source ~/.bashrc
 ```
 
+And if running the above command activates conda (you will know that it did if you see `(base)` in your command line), run the following:
+
+```bash
+conda deactivate
+```
+
 This is make sure that for any subsequent terminals that are newly opened and used can run `ros2` commands without it throwing a `ros2 command not found` error.
 
 To ensure a clean environment and prevent "Device Busy" or shared memory errors, **always run this reset sequence before starting the pipeline** (especially if a previous node crashed).
