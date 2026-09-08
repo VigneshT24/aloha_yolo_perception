@@ -18,6 +18,8 @@ ROS 2 perception package for Mobile ALOHA that runs YOLOv8 object detection, com
 *   **Asynchronous Threading:** Because four camera streams are hitting the system concurrently, we utilize Python's `threading.Lock()` and a ROS 2 `MultiThreadedExecutor`. This prevents the camera callbacks from crashing into each other while trying to access the YOLO model on your RTX 3050 simultaneously.
 
 ## Important Prerequisites (System Reset)
+### Hardware Requirements
+These commands assume you are using the System76 computer (or equivalent workstation) provided by Trossen Robotics with the Mobile ALOHA Teleoperation Platform. If you are using a custom computer setup, please follow the [hardware configuration guide](https://docs.trossenrobotics.com/aloha_docs/1.0/getting_started/mobile/hardware_setup.html) before proceeding.
 
 Before running any of the following commands in any terminal, first open a single terminal and run the following:
 
@@ -55,35 +57,46 @@ To ensure a clean environment and prevent "Device Busy" or shared memory errors,
 
 **Note**: You must run each of the following steps in a separate, newly opened terminal window.
 
-1. First, clone this repo:
+1. First, navigate to workspace and clone this repo:
    ```bash
+   cd ~/interbotix_ws/src
    git clone https://github.com/VigneshT24/aloha_yolo_perception.git
    ```
 
-2. Make sure you source all the terminals that you are going to run the following commands in using:
+2. Build the new package so ROS 2 can find it:
    ```bash
-   source /opt/ros/humble/setup.bash
-   source ~/interbotix_ws/install/setup.bash
+   cd ~/interbotix_ws
+   colcon build --packages-select aloha_yolo_perception --symlink-install
    ```
 
 3. Launch hardware cameras:
    ```bash
+   source /opt/ros/humble/setup.bash
+   source ~/interbotix_ws/install/setup.bash
    ros2 launch aloha aloha_bringup.launch.py robot:=aloha_stationary use_cameras:=true
    ```
 4. Publish the static frame transform:
    ```bash
+   source /opt/ros/humble/setup.bash
+   source ~/interbotix_ws/install/setup.bash
    ros2 run tf2_ros static_transform_publisher 0.0 0.0 1.0 0.0 0.0 0.0 world cam_high_color_optical_frame
    ```
 5. Run the YOLO detection node:
    ```bash
-   ros2 launch aloha aloha_bringup.launch.py robot:=aloha_stationary use_cameras:=true
+   source /opt/ros/humble/setup.bash
+   source ~/interbotix_ws/install/setup.bash
+   ros2 run aloha_yolo_perception yolo_detection_node
    ```
 6. View the 2D visualizer:
    ```bash
-   ros2 launch aloha aloha_bringup.launch.py robot:=aloha_stationary use_cameras:=true
+   source /opt/ros/humble/setup.bash
+   source ~/interbotix_ws/install/setup.bash
+   ros2 run rqt_image_view rqt_image_view
    ```
 7. Lastly, activate the mobile ALOHA arms
    ```bash
+   source /opt/ros/humble/setup.bash
+   source ~/interbotix_ws/install/setup.bash
    cd ~/interbotix_ws/src/aloha/scripts/
    python3 dual_side_teleop.py
    ```
