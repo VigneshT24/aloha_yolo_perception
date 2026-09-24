@@ -85,10 +85,10 @@ class YoloDetectionNode(Node):
 
         self.declare_parameter('model', 'yolov8m.pt')
         self.declare_parameter('confidence', 0.45)
-        self.declare_parameter('target_classes', [])
+        self.declare_parameter('target_classes', ['truck', 'cell phone', 'bottle', 'mouse'])
         self.declare_parameter('imgsz', 640)
-        self.declare_parameter('match_dist', 0.15)  # 15 cm search radius
-        self.declare_parameter('alpha', 0.4)
+        self.declare_parameter('match_dist', 0.45)  # 15 cm search radius
+        self.declare_parameter('alpha', 0.6)
 
         model_path = self.get_parameter('model').value
         self._confidence = self.get_parameter('confidence').value
@@ -97,6 +97,8 @@ class YoloDetectionNode(Node):
         self._match_dist = self.get_parameter('match_dist').value
         self._alpha = self.get_parameter('alpha').value
 
+        self._inference_lock = threading.Lock()
+        
         from ultralytics import YOLO
         self._model = YOLO(model_path)
         self._bridge = CvBridge()
@@ -223,8 +225,13 @@ class YoloDetectionNode(Node):
             except Exception as exc:
                 self.get_logger().debug(f'[{cam}] cv_bridge depth error: {exc}')
 
-        with self._lock:
-            results = self._model(bgr, verbose=False, imgsz=self._imgsz)
+        with self._inference_lock:
+            results = self._model(bgr, verbose=False, imgsz=self._imgsz, conf=0.5, max_det=10, half=True, classes=[7, 39, 63, 67])
+
+        # prevents heavy tf calculation when nothing is seen
+        if len(results[0].boxes) == 0:
+            return
+        
         K = np.array(info_msg.k).reshape(3, 3)
         fx, fy = K[0, 0], K[1, 1]
         cx, cy = K[0, 2], K[1, 2]
