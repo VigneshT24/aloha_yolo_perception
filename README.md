@@ -4,7 +4,7 @@ ROS 2 perception package for Mobile ALOHA that runs YOLOv8 object detection, com
 
 ## Pipeline Introduction
 ### 1. Artificial Intelligence & Vision
-*   **YOLOv8 (Medium):** A state-of-the-art, single-stage object detection model. We are running it in "stateless" mode, meaning it treats every frame independently to extract 2D bounding boxes and class labels (like "bottle" or "cup") without getting confused by the four different RealSense camera angles.
+*   **YOLOv8 (Medium):** A state-of-the-art, single-stage object detection model. We are running it in "stateless" mode, meaning it treats every frame independently to extract 2D bounding boxes and class labels (like "cell-phone" or "fire-truck") without getting confused by the four different RealSense camera angles.
 *   **OpenCV & CvBridge:** We use OpenCV for the visual bounding box overlays, and CvBridge to translate the raw ROS 2 image messages into standard NumPy arrays that YOLO and OpenCV can process.
 
 ### 2. 3D Spatial Mathematics & Tracking
@@ -15,7 +15,8 @@ ROS 2 perception package for Mobile ALOHA that runs YOLOv8 object detection, com
 
 ### 3. Middleware & System Architecture
 *   **TF2 (Transform Framework):** The ROS 2 library handling the complex matrix multiplications required to translate a coordinate from a specific camera's optical frame (e.g., `cam_left_wrist`) into the unified, absolute `world` frame.
-*   **Asynchronous Threading:** Because four camera streams are hitting the system concurrently, we utilize Python's `threading.Lock()` and a ROS 2 `MultiThreadedExecutor`. This prevents the camera callbacks from crashing into each other while trying to access the YOLO model on your RTX 3050 simultaneously.
+*   **Asynchronous Threading:** Because four camera streams are hitting the system concurrently, we utilize Python's `threading.Lock()` and a ROS 2 `MultiThreadedExecutor`. This prevents the camera callbacks from crashing into each other while trying to access the YOLO model on your RTX GPU simultaneously.
+*   **Quality of Service (QoS) Profiles:** High-bandwidth RealSense camera topics inherently publish using a `BEST_EFFORT` (SensorData) reliability profile. Our subscription nodes explicitly declare a matching `BEST_EFFORT` QoS to ensure the middleware does not silently reject the connection, allowing the raw hardware feeds to stream directly into the perception pipeline.
 
 ## Important Prerequisites (System Reset)
 ### Hardware Requirements
@@ -25,7 +26,7 @@ Before running any of the following commands in any terminal, first open a singl
 
 ```bash
 echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
-echo "source ~/ros2_ws/install/setup.bash" >> ~/.bashrc
+echo "source ~/interbotix_ws/install/setup.bash" >> ~/.bashrc
 source ~/.bashrc
 ```
 
