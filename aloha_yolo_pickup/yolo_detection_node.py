@@ -1,4 +1,7 @@
 """YOLO object detection node for Mobile ALOHA"""
+print("==========================================")
+print("updated 6")
+print("==========================================")
 
 import threading
 import time
@@ -6,6 +9,7 @@ import time
 import cv2
 import numpy as np
 import rclpy
+from rclpy.qos import qos_profile_sensor_data
 from rclpy.node import Node
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
@@ -85,7 +89,7 @@ class YoloDetectionNode(Node):
 
         self.declare_parameter('model', 'yolov8m.pt')
         self.declare_parameter('confidence', 0.45)
-        self.declare_parameter('target_classes', ['truck', 'cell phone', 'bottle', 'mouse'])
+        self.declare_parameter('target_classes', ['fire-truck', 'cell-phone', 'water-bottle', 'mouse', 'screwdriver'])
         self.declare_parameter('imgsz', 640)
         self.declare_parameter('match_dist', 0.45)  # 15 cm search radius
         self.declare_parameter('alpha', 0.6)
@@ -100,7 +104,10 @@ class YoloDetectionNode(Node):
         self._inference_lock = threading.Lock()
         
         from ultralytics import YOLO
-        self._model = YOLO(model_path)
+        # self._model = YOLO(model_path)
+        # self._model = YOLO('/home/vignesh/aloha_dataset/yolov8_data/runs/detect/train/weights/best.pt')
+        self._model = YOLO('/home/vignesh/runs/detect/train/weights/best.pt')
+        self.get_logger().info(f"Loaded YOLO classes: {self._model.names}")
         self._bridge = CvBridge()
 
         self._cbg = ReentrantCallbackGroup()
@@ -140,7 +147,8 @@ class YoloDetectionNode(Node):
 
         for cam in self._camera_names:
             #use best effort for the moving wrist cameras, reliable for the static ones
-            sub_qos = beqos if 'wrist' in cam else rqos
+            # sub_qos = beqos if 'wrist' in cam else rqos
+            sub_qos = beqos
             
             self.create_subscription(
                 Image, f'/{cam}/camera/color/image_raw',
@@ -155,6 +163,7 @@ class YoloDetectionNode(Node):
                 lambda m, c=cam: self._info_cb(m, c), sub_qos, callback_group=self._cbg)
 
     def _rgb_cb(self, msg: Image, cam: str) -> None:
+        self.get_logger().info(f"Received RGB frame from {cam}", throttle_duration_sec=1.0)
         with self._lock:
             self._rgb[cam] = msg
         self._run_inference(cam)
@@ -208,7 +217,7 @@ class YoloDetectionNode(Node):
         if rgb_msg is None:
             return
         if info_msg is None:
-            self.get_logger().debug(f'[{cam}] No camera_info yet, skipping')
+            self.get_logger().info(f'[{cam}] No camera_info yet, skipping')
             return
 
         try:
@@ -226,10 +235,18 @@ class YoloDetectionNode(Node):
                 self.get_logger().debug(f'[{cam}] cv_bridge depth error: {exc}')
 
         with self._inference_lock:
-            results = self._model(bgr, verbose=False, imgsz=self._imgsz, conf=0.5, max_det=10, half=True, classes=[7, 39, 63, 67])
+            results = self._model(bgr, verbose=False, imgsz=self._imgsz, conf=0.5, max_det=10, classes=[0, 1, 2, 3, 4])
 
-        # prevents heavy tf calculation when nothing is seen
+        vis_img = bgr.copy() # move this up so we have an image to publish!
+
+        # prevents heavy tf calculation when nothing is seen, but still publishes the video feed
         if len(results[0].boxes) == 0:
+            try:
+                vis_msg = self._bridge.cv2_to_imgmsg(vis_img, 'bgr8')
+                vis_msg.header = rgb_msg.header
+                self._pub_vis[cam].publish(vis_msg)
+            except Exception:
+                pass
             return
         
         K = np.array(info_msg.k).reshape(3, 3)
@@ -262,6 +279,11 @@ class YoloDetectionNode(Node):
                 px, py = int((x1 + x2) / 2), int((y1 + y2) / 2)
 
                 det = Detection2D()
+
+                cv2.rectangle(vis_img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
+                label = f'{class_name} {conf:.2f}'
+                cv2.putText(vis_img, label, (int(x1), int(y1) - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+
                 det.header = det_array.header
                 det.bbox.center.position.x = (x1 + x2) / 2
                 det.bbox.center.position.y = (y1 + y2) / 2
@@ -304,9 +326,9 @@ class YoloDetectionNode(Node):
 
                 poses_3d.append((pose_world, conf))
 
-                cv2.rectangle(vis_img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
+                # cv2.rectangle(vis_img, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
                 label = f'{class_name}#{track_id} {conf:.2f}'
-                cv2.putText(vis_img, label, (int(x1), int(y1) - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+                # cv2.putText(vis_img, label, (int(x1), int(y1) - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
         # Publish detection array
         self._pub_det.publish(det_array)
